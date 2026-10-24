@@ -1,0 +1,51 @@
+name: Research row shadow priority
+on:
+  push:
+    branches: [verify/1164-shadow-priority]
+permissions:
+  contents: read
+jobs:
+  reproduce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Browser cascade reference
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import { spawnSync } from 'node:child_process';
+          import assert from 'node:assert/strict';
+          const html = readFileSync('tests/fixtures/antipatterns/side-tab-shadow-priority.html', 'utf8');
+          const script = `<script>const result = ['is-warning', 'is-error', 'has-error'].map(name => ({name, shadow: getComputedStyle(document.querySelector('td.' + name)).boxShadow})); const pre = document.createElement('pre'); pre.id = 'cascade-result'; pre.textContent = JSON.stringify(result); document.body.append(pre);</script>`;
+          const path = process.env.RUNNER_TEMP + '/shadow-priority.html';
+          writeFileSync(path, html + script);
+          const chrome = spawnSync('google-chrome', ['--headless', '--no-sandbox', '--disable-gpu', '--dump-dom', 'file://' + path], { encoding: 'utf8' });
+          assert.equal(chrome.status, 0, chrome.stderr);
+          const result = JSON.parse(chrome.stdout.match(/<pre id="cascade-result">(.*?)<\/pre>/s)[1]);
+          console.log(JSON.stringify(result, null, 2));
+          assert.equal(result[1].shadow, 'none');
+          for (const i of [0, 2]) { assert.match(result[i].shadow, /inset/); assert.match(result[i].shadow, /3px/); }
+          writeFileSync('browser-cascade.json', JSON.stringify(result, null, 2));
+          NODE
+      - name: Focused existing core controls
+        run: cargo test --locked -p impeccable-core row_stripe --lib
+      - name: Existing static HTML controls and new passing controls
+        run: cargo test --locked -p impeccable-html --test side_accent_radius -- --skip row_shadow_priority_important_reset_stays_silent --skip row_shadow_priority_fixture_reports_only_visible_stripes
+      - name: New regression against unchanged production code (expected failure)
+        id: regression
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --locked -p impeccable-html --test side_accent_radius row_shadow_priority -- --nocapture 2>&1 | tee regression.log
+      - name: Require the reproduced regression to fail
+        if: steps.regression.outcome != 'failure'
+        run: echo 'Expected regression failure was not observed'; exit 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: shadow-priority-evidence
+          path: |
+            browser-cascade.json
+            regression.log
