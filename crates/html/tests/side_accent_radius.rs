@@ -365,3 +365,54 @@ fn a_row_stripe_reports_only_where_its_selector_matches_a_cell() {
     let square = side_tabs_on_page(&format!("<style>{stripe}</style>"), row_card);
     assert!(square.len() == 1 && square[0].contains("row or cell"), "{square:?}");
 }
+
+const SHADOW_PRIORITY_BODY: &str =
+    "<table><tbody><tr><td class=\"is-error\">Failed import</td></tr></tbody></table>";
+
+#[test]
+fn row_shadow_priority_normal_stripe_reports() {
+    assert_eq!(
+        side_tab_page("td.is-error { box-shadow: inset 3px 0 0 red; }", SHADOW_PRIORITY_BODY),
+        vec!["td.is-error — inset box-shadow 3px stripe on a row or cell (left edge)"]
+    );
+}
+
+#[test]
+fn row_shadow_priority_important_reset_stays_silent() {
+    assert!(side_tab_page(
+        "td.is-error { box-shadow: none !important; box-shadow: inset 3px 0 0 red; }",
+        SHADOW_PRIORITY_BODY
+    )
+    .is_empty());
+}
+
+#[test]
+fn row_shadow_priority_important_stripe_reports() {
+    assert_eq!(
+        side_tab_page(
+            "td.is-error { box-shadow: none; box-shadow: inset 3px 0 0 red !important; }",
+            SHADOW_PRIORITY_BODY
+        ),
+        vec!["td.is-error — inset box-shadow 3px stripe on a row or cell (left edge)"]
+    );
+}
+
+#[test]
+fn row_shadow_priority_fixture_reports_only_visible_stripes() {
+    let html = include_str!("../../../tests/fixtures/antipatterns/side-tab-shadow-priority.html");
+    let findings = detect_html_source(
+        html,
+        Path::new("/nonexistent/dir/page.html"),
+        &DetectHtmlOptions::default(),
+    );
+    let value = serde_json::to_value(&findings).unwrap();
+    let mut snippets: Vec<&str> = value.as_array().unwrap().iter()
+        .filter(|f| f["antipattern"] == "side-tab")
+        .map(|f| f["snippet"].as_str().unwrap())
+        .collect();
+    snippets.sort();
+    assert_eq!(snippets, vec![
+        "td.has-error — inset box-shadow 3px stripe on a row or cell (left edge)",
+        "td.is-warning — inset box-shadow 3px stripe on a row or cell (left edge)",
+    ]);
+}

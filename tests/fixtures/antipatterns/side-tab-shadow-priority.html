@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Status cell shadow priority</title>
+  <style>
+    table { width: 480px; border-collapse: collapse; }
+    td { width: 480px; height: 40px; padding: 8px; }
+    /* FLAG: a normal left-side status stripe. */
+    td.is-warning { box-shadow: inset 3px 0 0 red; }
+    /* PASS: the important reset wins over the later normal stripe. */
+    td.is-error {
+      box-shadow: none !important;
+      box-shadow: inset 3px 0 0 red;
+    }
+    /* FLAG: an important stripe wins over the normal reset. */
+    td.has-error {
+      box-shadow: none;
+      box-shadow: inset 3px 0 0 red !important;
+    }
+  </style>
+</head>
+<body>
+  <h1>Status cell shadow priority</h1>
+  <table>
+    <tbody>
+      <tr><td class="is-warning">Should flag: normal warning stripe</td></tr>
+      <tr><td class="is-error">Should pass: important error reset</td></tr>
+      <tr><td class="has-error">Should flag: important error stripe</td></tr>
+    </tbody>
+  </table>
+</body>
+</html>
