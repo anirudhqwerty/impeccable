@@ -5750,6 +5750,12 @@
   async function mountSvelteComponentVariant(variantNum) {
     if (!svelteComponentSession || !variantNum) return false;
     const { manifest, mountTargetEl, sessionId } = svelteComponentSession;
+    // A manifest replay replaces the mounted root, including Tune's inline
+    // properties. Keep edits only when remounting the same variant; switching
+    // variants still starts from that variant's defaults.
+    const retainedParams = svelteComponentSession.mountedVariant === variantNum
+      ? { ...paramsCurrentValues }
+      : null;
     // Resolved before the first await so the failure report can name the module
     // the browser could not reach, whichever step threw.
     const extension = manifest.componentExtension || 'svelte';
@@ -5795,6 +5801,7 @@
         }
         svelteComponentSession.swapAnchor = null;
         selectedElement = nextAnchor;
+        if (retainedParams) applySavedParamValues(nextAnchor, parseVariantParams(nextAnchor), retainedParams);
       } else {
         requestAnimationFrame(() => {
           if (svelteComponentSession?.sessionId !== sessionId) return;
@@ -5805,6 +5812,7 @@
           }
           svelteComponentSession.swapAnchor = null;
           selectedElement = settledAnchor;
+          if (retainedParams) applySavedParamValues(settledAnchor, parseVariantParams(settledAnchor), retainedParams);
         });
       }
       // Render truth, not publish truth: this is the only point in the whole
