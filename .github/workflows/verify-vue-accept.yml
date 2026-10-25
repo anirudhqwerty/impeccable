@@ -7,22 +7,23 @@ permissions:
 jobs:
   regression:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ac99828175ec05977e2f7bc684875075bba98f8a
+          ref: 1053d36a85168c36d9c2bd0440d312d7f76bb5e9
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: oven-sh/setup-bun@v2
       - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-accept-v1
+          key: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-accept-v2
           restore-keys: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-
       - name: Install fixture compiler on runner only
         run: |
@@ -34,3 +35,30 @@ jobs:
         run: cargo test --locked -p impeccable-live --lib
       - name: Focused Rust formatting
         run: rustfmt --edition 2021 --check crates/live/src/vue_component.rs crates/live/tests/vue_accept.rs
+      - name: Install repository test tools on runner only
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: npm install --omit=optional --no-audit --no-fund
+      - name: Required dependent Rust test suites
+        run: bun run test:rust-changed
+      - name: Build test engine
+        run: |
+          cargo build --locked -p impeccable
+          echo "IMPECCABLE_BIN=$GITHUB_WORKSPACE/target/debug/impeccable" >> "$GITHUB_ENV"
+          echo "IMPECCABLE_TEST_CHROME=$(command -v google-chrome)" >> "$GITHUB_ENV"
+      - name: Real Vue preview Tune Accept Reload
+        env:
+          IMPECCABLE_LIVE_VUE_COMPONENT: '1'
+          IMPECCABLE_E2E_DEBUG: '1'
+        run: node --test tests/live-vue-accept.test.mjs
+      - name: Source-first project build
+        run: bun run build
+      - name: Default project regression suites
+        run: bun run test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vue-verification-logs
+          path: |
+            target/test-rust-changed.log
