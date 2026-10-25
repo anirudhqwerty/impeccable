@@ -1,0 +1,34 @@
+name: Verify Vue accept parity
+on:
+  push:
+    branches: [verify/386-vue-accept]
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-baseline
+          restore-keys: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-
+      - name: Install fixture compiler on runner only
+        run: |
+          npm install --prefix "$RUNNER_TEMP/vue" --no-audit --no-fund vue@3.5.44 @vue/compiler-sfc@3.5.44
+          echo "IMPECCABLE_TEST_VUE_MODULES=$RUNNER_TEMP/vue/node_modules" >> "$GITHUB_ENV"
+      - name: Regression against unchanged main (expected red)
+        id: baseline
+        continue-on-error: true
+        run: cargo test --locked -p impeccable-live --test vue_accept -- --nocapture
+      - name: Require baseline regression failure
+        if: steps.baseline.outcome != 'failure'
+        run: exit 1
