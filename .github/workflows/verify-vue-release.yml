@@ -11,10 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 5839517818f99d6a1eece9d16af5df664d7c0e85
+          ref: 3eccf43b7c5997a3c24cca55754595a6e9494eda
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: '22'
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
