@@ -1,0 +1,44 @@
+name: Verify shared Svelte preview compatibility
+on:
+  push:
+    branches: [verify/386-svelte]
+permissions:
+  contents: read
+jobs:
+  svelte:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 38a5a0dcaebe0ba642fd3ec0ee99fa8375142812
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-svelte-v1
+          restore-keys: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-
+      - name: Install runner-only browser tools
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: |
+          npm install --omit=optional --no-audit --no-fund
+          npx playwright install chromium --only-shell
+      - name: Build test engine
+        run: |
+          cargo build --locked -p impeccable
+          echo "IMPECCABLE_BIN=$GITHUB_WORKSPACE/target/debug/impeccable" >> "$GITHUB_ENV"
+      - name: Svelte core and Tune lifecycle
+        env:
+          IMPECCABLE_E2E_ONLY: vite8-sveltekit-stateful
+          IMPECCABLE_E2E_SCENARIOS: core,params,republish
+          IMPECCABLE_E2E_RELOAD_VARIANTS: '1'
+          IMPECCABLE_E2E_DEBUG: '1'
+        run: bun run test:live-e2e
