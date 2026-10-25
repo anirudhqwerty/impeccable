@@ -1,0 +1,41 @@
+name: Verify Vue contribution with release engine
+on:
+  push:
+    branches: [verify/386-release]
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 5839517818f99d6a1eece9d16af5df664d7c0e85
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-release-v1
+          restore-keys: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-
+      - name: Install runner-only repository tools
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: bun install --frozen-lockfile
+      - name: Build release engine from source
+        run: |
+          cargo build --release --locked -p impeccable
+          echo "IMPECCABLE_BIN=$GITHUB_WORKSPACE/target/release/impeccable" >> "$GITHUB_ENV"
+      - name: Source-first build
+        run: bun run build
+      - name: Default suites and oracle against changed release engine
+        run: bun run test
