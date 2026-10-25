@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 38a5a0dcaebe0ba642fd3ec0ee99fa8375142812
+          ref: feat/vue-accept-parity
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
