@@ -10,13 +10,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - label: feature-node-floor
-            ref: 3eccf43b7c5997a3c24cca55754595a6e9494eda
-            node: '22.18.0'
-            suite: test
-          - label: upstream-latest-node-22
+          - label: upstream-node-floor
             ref: 936867543ac2576920d663cc9803597f6044f3ac
-            node: '22'
+            node: '22.18.0'
             suite: test:live
     name: ${{ matrix.label }}
     runs-on: ubuntu-latest
