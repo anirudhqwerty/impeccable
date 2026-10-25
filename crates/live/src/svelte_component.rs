@@ -904,7 +904,7 @@ fn append_sanitized_css_rule(
 }
 
 /// JS: sanitizeAcceptedSvelteCss(cssLines, variantNum, paramValues, rootTag)
-fn sanitize_accepted_svelte_css(
+pub(crate) fn sanitize_accepted_component_css(
     css_lines: &[String],
     variant_num: &str,
     param_values: Option<&Map<String, Value>>,
@@ -1477,7 +1477,7 @@ pub fn inline_svelte_component_accept(
         || variant_css.contains("impeccable-variant-ready")
     {
         variant_css =
-            sanitize_accepted_svelte_css(&css_lines, variant_num, param_values, &root_tag)
+            sanitize_accepted_component_css(&css_lines, variant_num, param_values, &root_tag)
                 .join("\n");
     }
     let empty = Map::new();
@@ -1672,7 +1672,7 @@ fn inline_svelte_component_insert_accept(
     if variant_css.contains("data-impeccable-variant")
         || variant_css.contains("impeccable-variant-ready")
     {
-        variant_css = sanitize_accepted_svelte_css(css_lines, variant_num, param_values, &root_tag)
+        variant_css = sanitize_accepted_component_css(css_lines, variant_num, param_values, &root_tag)
             .join("\n");
     }
     let declared = read_declared_params(manifest, variant_num, cwd);
