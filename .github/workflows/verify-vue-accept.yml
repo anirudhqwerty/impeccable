@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 1053d36a85168c36d9c2bd0440d312d7f76bb5e9
+          ref: 9f42aff220a27097b0e7afe8c26cb027c3d35ee4
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
@@ -23,7 +23,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-accept-v2
+          key: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-accept-v3
           restore-keys: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-
       - name: Install fixture compiler on runner only
         run: |
@@ -40,8 +40,6 @@ jobs:
           PUPPETEER_SKIP_DOWNLOAD: 'true'
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
         run: npm install --omit=optional --no-audit --no-fund
-      - name: Required dependent Rust test suites
-        run: bun run test:rust-changed
       - name: Build test engine
         run: |
           cargo build --locked -p impeccable
@@ -52,6 +50,8 @@ jobs:
           IMPECCABLE_LIVE_VUE_COMPONENT: '1'
           IMPECCABLE_E2E_DEBUG: '1'
         run: node --test tests/live-vue-accept.test.mjs
+      - name: Required dependent Rust test suites
+        run: bun run test:rust-changed
       - name: Source-first project build
         run: bun run build
       - name: Default project regression suites
