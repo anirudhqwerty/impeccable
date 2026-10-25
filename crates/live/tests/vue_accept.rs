@@ -78,7 +78,7 @@ impl Drop for Fixture {
 }
 
 fn variant(style: &str) -> String {
-    format!("<template>\n{MARKUP}\n</template>\n<style {style}>\n.card {{ padding: var(--p-space, 8px); color: red; }}\n</style>")
+    format!("<template>\n{MARKUP}\n</template>\n<style {style}>\n.card {{ padding: calc(var(--p-space, 8) * 1px); color: red; }}\n</style>")
 }
 
 #[test]
@@ -88,7 +88,7 @@ fn vue_accept_preserves_tuned_values_scripts_and_bindings() {
     assert_eq!(result["handled"], true, "{result}");
     assert_ne!(result["mode"], "error", "{result}");
     let source = fixture.source();
-    assert!(source.contains("padding: 23px"), "{source}");
+    assert!(source.contains("padding: calc(23 * 1px)"), "{source}");
     assert!(!source.contains("var(--p-space"));
     assert_eq!(
         source.split("<template>").next(),
@@ -118,7 +118,7 @@ fn vue_accept_keeps_global_styles_and_writes_to_a_scoped_block() {
         assert_ne!(result["mode"], "error", "{result}");
         let accepted = fixture.source();
         assert!(accepted.contains("<style scoped>"), "{accepted}");
-        assert!(accepted.contains("padding: 23px"), "{accepted}");
+        assert!(accepted.contains("padding: calc(23 * 1px)"), "{accepted}");
         assert!(
             accepted.contains(&format!("<style>{original_global}")),
             "global CSS changed: {accepted}"

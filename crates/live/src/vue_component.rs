@@ -11,6 +11,107 @@ use std::{
     process::{Command, Stdio},
 };
 
+/// Opt-in until the real adapter acceptance/reload suite has passed.
+pub fn enabled(file: &str, env: &crate::util::Env) -> bool {
+    file.to_ascii_lowercase().ends_with(".vue")
+        && env
+            .get("IMPECCABLE_LIVE_VUE_COMPONENT")
+            .is_some_and(|v| matches!(v.as_str(), "1" | "true"))
+}
+
+pub fn scaffold(
+    id: &str,
+    count: i64,
+    file: &str,
+    start: i64,
+    end: i64,
+    original: &[String],
+    cwd: &str,
+) -> crate::svelte_component::Scaffold {
+    use crate::svelte_component::{Scaffold, ScaffoldedSession, SVELTE_COMPONENT_ROOT};
+    let make = || -> Result<ScaffoldedSession, String> {
+        crate::paths::safe_session_id(id)?;
+        if !(1..=8).contains(&count) {
+            return Err("Vue preview requires 1-8 variants".into());
+        }
+        let source_file = jsp::resolve(cwd, &[file]);
+        let source = safe_read(&source_file).ok_or("Cannot read Vue component")?;
+        let parsed = analyze(&source, &source_file, cwd)?;
+        let markup = original.join("\n");
+        let script = format!("defineProps({});", parsed["bindings"]);
+        let props: Vec<Value> = parsed["bindings"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(|name| json!({"prop":name,"expr":name,"kind":"vue-binding"}))
+            .collect();
+        let all_css = parsed["styles"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|s| s["content"].as_str().unwrap_or(""))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let (seed, _) = crate::svelte_component::extract_matching_source_css(
+            &format!("<style>{all_css}</style>"),
+            &markup,
+        );
+        let relative = format!("{SVELTE_COMPONENT_ROOT}/{id}");
+        let directory = jsp::join(&[cwd, &relative]);
+        let manifest_file = format!("{relative}/manifest.json");
+        if Path::new(&directory).exists() {
+            let previous: Value = serde_json::from_str(
+                &safe_read(&jsp::join(&[&directory, "manifest.json"]))
+                    .ok_or("Existing Vue session has no manifest")?,
+            )
+            .map_err(|e| e.to_string())?;
+            if previous["sourceFile"] != file || previous["originalMarkup"] != markup {
+                return Err("Vue session already targets another source selection".into());
+            }
+            return Ok(ScaffoldedSession {
+                manifest: previous,
+                manifest_file,
+                component_dir: relative,
+                prop_contract: props,
+                stub_markup: markup,
+            });
+        }
+        std::fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+        let runtime = format!("{SVELTE_COMPONENT_ROOT}/__vue_runtime.js");
+        std::fs::write(jsp::join(&[cwd, &runtime]), "import { createVNode, render } from 'vue';\nexport function mount(Component, { target, props, appContext }) { const node = createVNode(Component, props); node.appContext = appContext || null; render(node, target); return { target }; }\nexport function unmount(instance) { render(null, instance.target); }\n").map_err(|e| e.to_string())?;
+        let manifest = json!({"id":id,"count":count,"previewMode":"vue-component","componentExtension":"vue","sourceFile":file,
+            "sourceStartLine":start,"sourceEndLine":end,"originalMarkup":markup,"previewScript":script,"propContract":props,
+            "componentDir":relative,"componentDirAbs":jsp::to_posix(&directory),"runtimeModule":format!("/{runtime}"),"runtimeModuleAbs":jsp::join(&[cwd,&runtime])});
+        for n in 1..=count {
+            let variant = format!("<script setup>\n{script}\n</script>\n<template>\n{markup}\n</template>\n<style scoped>\n{seed}\n</style>\n");
+            if let Err(error) = analyze(&variant, &source_file, cwd).and_then(|_| {
+                std::fs::write(jsp::join(&[&directory, &format!("v{n}.vue")]), &variant)
+                    .map_err(|e| e.to_string())
+            }) {
+                let _ = std::fs::remove_dir_all(&directory);
+                return Err(error);
+            }
+        }
+        std::fs::write(
+            jsp::join(&[cwd, &manifest_file]),
+            serde_json::to_string_pretty(&manifest).map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(ScaffoldedSession {
+            manifest,
+            manifest_file,
+            component_dir: relative,
+            prop_contract: props,
+            stub_markup: markup,
+        })
+    };
+    match make() {
+        Ok(session) => Scaffold::Session(session),
+        Err(error) => Scaffold::Fallback(error),
+    }
+}
+
 pub fn analyze(source: &str, filename: &str, cwd: &str) -> Result<Value, String> {
     let mut child = Command::new(impeccable_common::proc::node_exe())
         .args([
@@ -209,7 +310,7 @@ pub fn inline_vue_component_accept(
         .collect();
     let markup = reindent_preserving_structure(
         &markup
-            .trim()
+            .trim_matches(['\r', '\n'])
             .split('\n')
             .map(str::to_owned)
             .collect::<Vec<_>>(),

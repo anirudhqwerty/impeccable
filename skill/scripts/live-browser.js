@@ -5139,7 +5139,7 @@
   }
 
   function isFrameworkComponentPreviewMode(mode) {
-    return mode === 'svelte-component';
+    return mode === 'svelte-component' || mode === 'vue-component';
   }
 
   function parseOriginalMarkupElement(originalMarkup) {
@@ -5553,6 +5553,17 @@
   }
 
   function buildSveltePropValuesFromLiveElement(liveEl, manifest) {
+    if (manifest?.previewMode === 'vue-component') {
+      const instance = liveEl?.__vueParentComponent;
+      if (!instance) throw new Error('Vue preview could not find the selected component instance.');
+      const values = {};
+      for (const entry of manifest.propContract || []) {
+        const name = entry.expr;
+        const value = instance.setupState?.[name] ?? instance.props?.[name] ?? instance.ctx?.[name];
+        values[entry.prop] = typeof value === 'function' && !/^[A-Z]/.test(name) ? () => {} : value;
+      }
+      return values;
+    }
     const contract = manifest?.propContract || [];
     const values = {};
     if (!liveEl || contract.length === 0) return values;
@@ -5771,6 +5782,7 @@
         target: mountTargetEl,
         props: { ...svelteComponentSession.propValues },
         intro: false,
+        appContext: svelteComponentSession.vueAppContext,
       });
       svelteComponentSession.mountedVariant = variantNum;
       svelteComponentSession.runtime = runtime;
@@ -5990,6 +6002,7 @@
         wrapperEl: wrapper,
         mountTargetEl: mountTarget,
         detachedOriginal,
+        vueAppContext: manifest.previewMode === 'vue-component' ? detachedOriginal?.__vueParentComponent?.appContext : null,
         mountedInstance: null,
         mountedVariant: 0,
         runtime: null,

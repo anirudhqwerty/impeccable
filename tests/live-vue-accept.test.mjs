@@ -1,0 +1,55 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { chromium } from 'playwright';
+import { bootFixtureSession, FIXTURES_DIR } from './live-e2e/session.mjs';
+import { waitForHandshake, pickElement, clickGo, waitForCycling, openTunePanel, setTuneRange, closeTunePanel, clickAccept, waitForBarHidden } from './live-e2e/ui.mjs';
+
+test('Vue preview → Tune → Accept → Reload preserves style and behavior', { timeout: 240000 }, async (t) => {
+  const browser = await chromium.launch({ headless: true, ...(process.env.IMPECCABLE_TEST_CHROME ? { executablePath: process.env.IMPECCABLE_TEST_CHROME } : {}) });
+  const fixture = JSON.parse(readFileSync(join(FIXTURES_DIR, 'vite-vue-stateful', 'fixture.json')));
+  let session;
+  try {
+    session = await bootFixtureSession({ name: 'vite-vue-stateful', fixture, browser,
+      wrapTarget: { file: 'src/App.vue', classes: 'card', tag: 'section' },
+      agent: { autoRepairMountFailures: false, async generateVariants(event) {
+        return { scopedCss: '', variants: Array.from({ length: event.count }, () => ({
+          vueComponent: { css: '.card { width: 400px; min-height: 80px; padding: calc(var(--p-space, 8) * 1px); color: #111; background: #ffd6d6; }' },
+          params: [{ id: 'space', kind: 'range', min: 4, max: 32, step: 1, default: 8, label: 'Space' }],
+        })) };
+      } }, log: message => t.diagnostic(message),
+    });
+    const { page, tmp } = session;
+    await waitForHandshake(page);
+    const source = readFileSync(join(tmp, 'src/App.vue'), 'utf8');
+    await pickElement(page, 'section.card');
+    await clickGo(page);
+    await waitForCycling(page);
+    assert.equal(readFileSync(join(tmp, 'src/App.vue'), 'utf8'), source, 'generation must not rewrite source');
+    await openTunePanel(page);
+    await setTuneRange(page, 'Space', 23);
+    await closeTunePanel(page);
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('section.card')).paddingLeft === '23px');
+    await page.reload();
+    await waitForHandshake(page);
+    await waitForCycling(page);
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('section.card')).paddingLeft === '23px');
+    await clickAccept(page);
+    await waitForBarHidden(page);
+    await page.waitForFunction(() => !document.querySelector('[data-impeccable-variants]'));
+    await page.reload();
+    await page.waitForSelector('section.card');
+    assert.equal(await page.locator('section.card').evaluate(el => getComputedStyle(el).paddingLeft), '23px');
+    assert.equal(await page.locator('.unrelated').evaluate(el => getComputedStyle(el).paddingLeft), '3px');
+    await page.locator('section.card').click();
+    await page.waitForFunction(() => document.querySelector('section.card').textContent.includes('Imports: 1'));
+    const accepted = readFileSync(join(tmp, 'src/App.vue'), 'utf8');
+    assert.equal(accepted.split('<template>')[0], source.split('<template>')[0]);
+    assert.equal(accepted.split('<style>')[1], source.split('<style>')[1]);
+    assert.doesNotMatch(accepted, /data-impeccable-|var\(--p-/);
+    assert.deepEqual(readdirSync(join(tmp, 'node_modules/.impeccable-live')).filter(name => /^[a-f0-9]{8}$/.test(name)), []);
+    execFileSync('npm', ['run', 'build'], { cwd: tmp, stdio: 'pipe' });
+  } finally { if (session) await session.teardown(); await browser.close(); }
+});
