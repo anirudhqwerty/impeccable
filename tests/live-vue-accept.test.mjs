@@ -13,13 +13,8 @@ test('Vue preview → Tune → Accept → Reload preserves style and behavior', 
   let session;
   let cleanupPromise;
   const cleanup = () => cleanupPromise ||= (async () => {
+    if (session) await session.teardown();
     await browser.close();
-    if (session) {
-      // This PID belongs to the sandboxed fixture server returned by boot.
-      // Closing it releases an outstanding agent poll before teardown awaits it.
-      try { process.kill(session.live.pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
-      await session.teardown();
-    }
   })();
   t.after(cleanup);
   try {
