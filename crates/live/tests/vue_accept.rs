@@ -176,3 +176,108 @@ fn vue_accept_rejects_variant_zero() {
     .is_some());
     assert_eq!(fixture.source(), SOURCE);
 }
+
+#[test]
+fn vue_accept_rejects_script_edits_and_missing_behavior() {
+    for selected in [
+        format!(
+            "{}\n<script setup>const count = 99;</script>",
+            variant("scoped")
+        ),
+        variant("scoped").replace("@click=\"increment\"", ""),
+        variant("scoped").replace("{{ count }}", "0"),
+    ] {
+        let fixture = Fixture::new(SOURCE, &selected);
+        let (_, result) = fixture.accept("1");
+        assert_eq!(result["mode"], "error", "{result}");
+        assert_eq!(fixture.source(), SOURCE);
+        assert!(fixture
+            .0
+            .join("node_modules/.impeccable-live/ab12cd34")
+            .exists());
+    }
+}
+
+#[test]
+fn vue_accept_rejects_global_css_escape_without_writing() {
+    let selected = variant("scoped").replace(".card {", ":global(body) {");
+    let fixture = Fixture::new(SOURCE, &selected);
+    let (_, result) = fixture.accept("1");
+    assert_eq!(result["mode"], "error", "{result}");
+    assert_eq!(fixture.source(), SOURCE);
+}
+
+#[test]
+fn vue_accept_refuses_multiple_scoped_blocks_without_reordering_css() {
+    let source = format!("{SOURCE}\n<style scoped>.other {{ color: blue; }}</style>");
+    let fixture = Fixture::new(&source, &variant("scoped"));
+    let (_, result) = fixture.accept("1");
+    assert_eq!(result["mode"], "error", "{result}");
+    assert!(
+        result["error"]
+            .as_str()
+            .unwrap_or("")
+            .contains("scoped CSS block"),
+        "{result}"
+    );
+    assert_eq!(fixture.source(), source);
+}
+
+#[test]
+fn vue_accept_preserves_unicode_source_offsets() {
+    let source = SOURCE.replace("<script>\n", "<script>\n// 状態 🚀\n");
+    let fixture = Fixture::new(&source, &variant("scoped"));
+    let (_, result) = fixture.accept("1");
+    assert_ne!(result["mode"], "error", "{result}");
+    let accepted = fixture.source();
+    assert_eq!(
+        accepted.split("<template>").next(),
+        source.split("<template>").next()
+    );
+    assert!(accepted.contains("padding: calc(23 * 1px)"), "{accepted}");
+}
+
+#[test]
+fn vue_scaffold_is_opt_in_and_preserves_source() {
+    use impeccable_live::{live_wrap, svelte_component};
+    let fixture = Fixture::new(SOURCE, &variant("scoped"));
+    fs::remove_dir_all(fixture.0.join("node_modules/.impeccable-live/ab12cd34")).unwrap();
+    let mut env = HashMap::new();
+    assert!(!impeccable_live::vue_component::enabled(
+        "StatusCard.vue",
+        &env
+    ));
+    env.insert("IMPECCABLE_LIVE_VUE_COMPONENT".to_string(), "1".to_string());
+    let (mut io, cap) = Io::captured("", fixture.0.clone(), env);
+    assert_eq!(
+        live_wrap::run(
+            &[
+                "--id",
+                "ab12cd34",
+                "--count",
+                "1",
+                "--file",
+                "StatusCard.vue",
+                "--classes",
+                "card",
+                "--tag",
+                "section"
+            ]
+            .map(str::to_owned),
+            &mut io
+        ),
+        0,
+        "{}",
+        String::from_utf8_lossy(&cap.stderr.borrow())
+    );
+    let value: Value = serde_json::from_slice(&cap.stdout.borrow()).unwrap();
+    assert_eq!(value["previewMode"], "vue-component", "{value}");
+    assert_eq!(fixture.source(), SOURCE);
+    assert!(fixture
+        .0
+        .join("node_modules/.impeccable-live/ab12cd34/v1.vue")
+        .exists());
+    let check = svelte_component::compile_check_variants("ab12cd34", fixture.0.to_str().unwrap());
+    assert_eq!(check["ok"], true, "{check}");
+    assert_eq!(check["checked"], 1);
+}

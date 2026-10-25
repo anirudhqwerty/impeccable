@@ -50,6 +50,9 @@ try {
     if (node.type === 5) behaviors.push('text:' + node.content.content.trim());
     if (node.type === 1) {
       if (node.tagType === 1) behaviors.push('component:' + node.tag);
+      for (const prop of node.props || []) if (prop.type === 6 && ['ref', 'key'].includes(prop.name)) {
+        behaviors.push(JSON.stringify({ attribute: prop.name, value: prop.value?.content }));
+      }
       for (const prop of node.props || []) if (prop.type === 7) {
         behaviors.push(JSON.stringify({ name: prop.name, arg: prop.arg?.content, exp: prop.exp?.content?.trim(), modifiers: (prop.modifiers || []).map(m => typeof m === 'string' ? m : m.content) }));
       }

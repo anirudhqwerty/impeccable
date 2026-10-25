@@ -32,6 +32,10 @@ test('Vue preview → Tune → Accept → Reload preserves style and behavior', 
     await setTuneRange(page, 'Space', 23);
     await closeTunePanel(page);
     await page.waitForFunction(() => getComputedStyle(document.querySelector('section.card')).paddingLeft === '23px');
+    const phase = await page.evaluate(() => Object.keys(localStorage).map(key => {
+      try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
+    }).find(value => value?.state === 'CYCLING')?.generationPhase);
+    assert.ok(phase, 'generation phase must be persisted before reload');
     await page.reload();
     await waitForHandshake(page);
     await waitForCycling(page);

@@ -37,6 +37,16 @@ pub fn scaffold(
         let source_file = jsp::resolve(cwd, &[file]);
         let source = safe_read(&source_file).ok_or("Cannot read Vue component")?;
         let parsed = analyze(&source, &source_file, cwd)?;
+        if parsed["styles"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter(|s| s["scoped"] == true)
+            .count()
+            > 1
+        {
+            return Err("Vue preview currently requires at most one scoped CSS block; consolidate scoped blocks before wrapping".into());
+        }
         let markup = original.join("\n");
         let script = format!("defineProps({});", parsed["bindings"]);
         let props: Vec<Value> = parsed["bindings"]
@@ -57,6 +67,11 @@ pub fn scaffold(
             &format!("<style>{all_css}</style>"),
             &markup,
         );
+        if !safe_variant_css(&parse_stylesheet(&seed)) {
+            return Err(
+                "Vue preview cannot isolate this selection's global or deep CSS rules".into(),
+            );
+        }
         let relative = format!("{SVELTE_COMPONENT_ROOT}/{id}");
         let directory = jsp::join(&[cwd, &relative]);
         let manifest_file = format!("{relative}/manifest.json");
@@ -258,6 +273,16 @@ pub fn inline_vue_component_accept(
     let source = safe_read(&source_file).ok_or("Cannot read Vue source")?;
     let selected = std::fs::read_to_string(&variant_file).map_err(|e| e.to_string())?;
     let before = analyze(&source, &source_file, cwd)?;
+    if before["styles"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|s| s["scoped"] == true)
+        .count()
+        > 1
+    {
+        return Err("Vue acceptance currently requires at most one scoped CSS block; consolidate scoped blocks before wrapping".into());
+    }
     let next = analyze(&selected, &source_file, cwd)?;
     for script in next["scripts"].as_array().into_iter().flatten() {
         if script["content"].as_str().unwrap_or("").trim()
@@ -374,7 +399,10 @@ pub fn inline_vue_component_accept(
             "Vue acceptance left preview artifacts: {findings:?}"
         ));
     }
-    std::fs::write(&source_file, &accepted)
+    if safe_read(&source_file).as_deref() != Some(source.as_str()) {
+        return Err("Vue source changed during validation; accept the current source again".into());
+    }
+    impeccable_common::fsx::write_atomic(&source_path, accepted.as_bytes())
         .map_err(|e| format!("Failed to write Vue source: {e}"))?;
     let cleanup_error = std::fs::remove_dir_all(&directory)
         .err()
