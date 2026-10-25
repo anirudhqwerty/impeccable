@@ -66,5 +66,11 @@ test('Vue preview → Tune → Accept → Reload preserves style and behavior', 
     assert.doesNotMatch(accepted, /data-impeccable-|var\(--p-/);
     assert.deepEqual(readdirSync(join(tmp, 'node_modules/.impeccable-live')).filter(name => /^[a-f0-9]{8}$/.test(name)), []);
     execFileSync('npm', ['run', 'build'], { cwd: tmp, stdio: 'pipe' });
+  } catch (error) {
+    if (session) t.diagnostic(JSON.stringify(await session.page.evaluate(() => ({
+      cards: [...document.querySelectorAll('section.card')].map(el => ({ html: el.outerHTML.slice(0, 500), padding: getComputedStyle(el).paddingLeft })),
+      state: window.__IMPECCABLE_LIVE_CHROME_CORE__?.debugState?.(),
+    })).catch(() => null)));
+    throw error;
   } finally { await cleanup(); }
 });
