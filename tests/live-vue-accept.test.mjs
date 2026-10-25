@@ -5,12 +5,13 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
-import { bootFixtureSession, FIXTURES_DIR } from './live-e2e/session.mjs';
+import { bootFixtureSession } from './live-e2e/session.mjs';
 import { waitForHandshake, pickElement, clickGo, waitForCycling, openTunePanel, setTuneRange, closeTunePanel, clickAccept, waitForBarHidden } from './live-e2e/ui.mjs';
 
 test('Vue preview → Tune → Accept → Reload preserves style and behavior', { timeout: 240000 }, async (t) => {
   const browser = await chromium.launch({ headless: true, ...(process.env.IMPECCABLE_TEST_CHROME ? { executablePath: process.env.IMPECCABLE_TEST_CHROME } : {}) });
-  const fixture = JSON.parse(readFileSync(join(FIXTURES_DIR, 'vite-vue-stateful', 'fixture.json')));
+  const fixtureRoot = join(process.cwd(), 'tests/fixtures/live-vue-accept/app');
+  const fixture = JSON.parse(readFileSync(join(fixtureRoot, 'fixture.json')));
   let session;
   let cleanupPromise;
   const cleanup = () => cleanupPromise ||= (async () => {
@@ -19,7 +20,7 @@ test('Vue preview → Tune → Accept → Reload preserves style and behavior', 
   })();
   t.after(cleanup);
   try {
-    session = await bootFixtureSession({ name: 'vite-vue-stateful', fixture, browser,
+    session = await bootFixtureSession({ name: 'vite-vue-stateful', fixture, fixtureRoot, browser,
       wrapTarget: { file: 'src/App.vue', classes: 'card', tag: 'section' },
       agent: { autoRepairMountFailures: false, async generateVariants(event) {
         return { scopedCss: '', variants: Array.from({ length: event.count }, () => ({
