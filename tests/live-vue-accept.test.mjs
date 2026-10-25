@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
 import { bootFixtureSession, FIXTURES_DIR } from './live-e2e/session.mjs';
 import { waitForHandshake, pickElement, clickGo, waitForCycling, openTunePanel, setTuneRange, closeTunePanel, clickAccept, waitForBarHidden } from './live-e2e/ui.mjs';
@@ -49,13 +50,18 @@ test('Vue preview → Tune → Accept → Reload preserves style and behavior', 
     await clickAccept(page);
     await waitForBarHidden(page);
     await page.waitForFunction(() => !document.querySelector('[data-impeccable-variants]'), null, { timeout: 15000 });
+    // The picker is released as soon as accept is durable. Source promotion
+    // finishes asynchronously, so DOM cleanup alone is not a write receipt.
+    const deadline = Date.now() + 20000;
+    while (readFileSync(join(tmp, 'src/App.vue'), 'utf8') === source && Date.now() < deadline) await delay(50);
+    const accepted = readFileSync(join(tmp, 'src/App.vue'), 'utf8');
+    assert.notEqual(accepted, source, 'accept must promote the selected component to source');
     await page.reload();
     await page.waitForSelector('section.card');
     assert.equal(await page.locator('section.card').evaluate(el => getComputedStyle(el).paddingLeft), '23px');
     assert.equal(await page.locator('.unrelated').evaluate(el => getComputedStyle(el).paddingLeft), '3px');
     await page.locator('section.card').click();
     await page.waitForFunction(() => document.querySelector('section.card').textContent.includes('Imports: 1'), null, { timeout: 15000 });
-    const accepted = readFileSync(join(tmp, 'src/App.vue'), 'utf8');
     assert.equal(accepted.split('<template>')[0], source.split('<template>')[0]);
     assert.equal(accepted.split('<style>')[1], source.split('<style>')[1]);
     assert.doesNotMatch(accepted, /data-impeccable-|var\(--p-/);
