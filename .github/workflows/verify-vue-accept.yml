@@ -10,6 +10,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ac99828175ec05977e2f7bc684875075bba98f8a
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -19,16 +22,15 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-baseline
+          key: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-accept-v1
           restore-keys: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-
       - name: Install fixture compiler on runner only
         run: |
           npm install --prefix "$RUNNER_TEMP/vue" --no-audit --no-fund vue@3.5.44 @vue/compiler-sfc@3.5.44
           echo "IMPECCABLE_TEST_VUE_MODULES=$RUNNER_TEMP/vue/node_modules" >> "$GITHUB_ENV"
-      - name: Regression against unchanged main (expected red)
-        id: baseline
-        continue-on-error: true
+      - name: Vue acceptance regressions
         run: cargo test --locked -p impeccable-live --test vue_accept -- --nocapture
-      - name: Require baseline regression failure
-        if: steps.baseline.outcome != 'failure'
-        run: exit 1
+      - name: Live crate regressions including shared Svelte CSS
+        run: cargo test --locked -p impeccable-live --lib
+      - name: Focused Rust formatting
+        run: rustfmt --edition 2021 --check crates/live/src/vue_component.rs crates/live/tests/vue_accept.rs
