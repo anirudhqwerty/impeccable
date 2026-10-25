@@ -11,6 +11,7 @@ test('Vue preview → Tune → Accept → Reload preserves style and behavior', 
   const browser = await chromium.launch({ headless: true, ...(process.env.IMPECCABLE_TEST_CHROME ? { executablePath: process.env.IMPECCABLE_TEST_CHROME } : {}) });
   const fixture = JSON.parse(readFileSync(join(FIXTURES_DIR, 'vite-vue-stateful', 'fixture.json')));
   let session;
+  t.after(async () => { if (session) { session.stopLiveServer(); await session.teardown(); } await browser.close(); });
   try {
     session = await bootFixtureSession({ name: 'vite-vue-stateful', fixture, browser,
       wrapTarget: { file: 'src/App.vue', classes: 'card', tag: 'section' },
@@ -26,34 +27,34 @@ test('Vue preview → Tune → Accept → Reload preserves style and behavior', 
     const source = readFileSync(join(tmp, 'src/App.vue'), 'utf8');
     await pickElement(page, 'section.card');
     await clickGo(page);
-    await waitForCycling(page);
+    await waitForCycling(page, 3);
     assert.equal(readFileSync(join(tmp, 'src/App.vue'), 'utf8'), source, 'generation must not rewrite source');
     await openTunePanel(page);
     await setTuneRange(page, 'Space', 23);
     await closeTunePanel(page);
-    await page.waitForFunction(() => getComputedStyle(document.querySelector('section.card')).paddingLeft === '23px');
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('section.card')).paddingLeft === '23px', null, { timeout: 15000 });
     const phase = await page.evaluate(() => Object.keys(localStorage).map(key => {
       try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
     }).find(value => value?.state === 'CYCLING')?.generationPhase);
     assert.ok(phase, 'generation phase must be persisted before reload');
     await page.reload();
     await waitForHandshake(page);
-    await waitForCycling(page);
-    await page.waitForFunction(() => getComputedStyle(document.querySelector('section.card')).paddingLeft === '23px');
+    await waitForCycling(page, 3);
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('section.card')).paddingLeft === '23px', null, { timeout: 15000 });
     await clickAccept(page);
     await waitForBarHidden(page);
-    await page.waitForFunction(() => !document.querySelector('[data-impeccable-variants]'));
+    await page.waitForFunction(() => !document.querySelector('[data-impeccable-variants]'), null, { timeout: 15000 });
     await page.reload();
     await page.waitForSelector('section.card');
     assert.equal(await page.locator('section.card').evaluate(el => getComputedStyle(el).paddingLeft), '23px');
     assert.equal(await page.locator('.unrelated').evaluate(el => getComputedStyle(el).paddingLeft), '3px');
     await page.locator('section.card').click();
-    await page.waitForFunction(() => document.querySelector('section.card').textContent.includes('Imports: 1'));
+    await page.waitForFunction(() => document.querySelector('section.card').textContent.includes('Imports: 1'), null, { timeout: 15000 });
     const accepted = readFileSync(join(tmp, 'src/App.vue'), 'utf8');
     assert.equal(accepted.split('<template>')[0], source.split('<template>')[0]);
     assert.equal(accepted.split('<style>')[1], source.split('<style>')[1]);
     assert.doesNotMatch(accepted, /data-impeccable-|var\(--p-/);
     assert.deepEqual(readdirSync(join(tmp, 'node_modules/.impeccable-live')).filter(name => /^[a-f0-9]{8}$/.test(name)), []);
     execFileSync('npm', ['run', 'build'], { cwd: tmp, stdio: 'pipe' });
-  } finally { if (session) await session.teardown(); await browser.close(); }
+  } finally { if (session) { session.stopLiveServer(); await session.teardown(); } await browser.close(); }
 });
