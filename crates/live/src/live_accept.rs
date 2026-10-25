@@ -312,6 +312,11 @@ fn accept_cli(args: &[String], io: &mut Io) -> i32 {
         context.push(("previewMode", Value::String(if is_vue { "vue-component" } else { "svelte-component" }.into())));
         context.push(("componentDir", component_dir));
 
+        if is_vue && param_values_raw.is_some() && param_values.is_none() {
+            emit_result(io, operation_failure("Invalid Vue parameter values: expected a JSON object", &context));
+            return 0;
+        }
+
         let sf_str = crate::accept_css::js_string(&source_file);
         let lock_file = jsp::resolve(&cwd, &[&sf_str]);
         let owner = format!("{}:{}", requested_operation, id);

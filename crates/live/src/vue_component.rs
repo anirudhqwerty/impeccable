@@ -197,7 +197,7 @@ fn safe_variant_css(nodes: &[CssNode]) -> bool {
 
 fn required_behaviors(original: &Value, variant: &Value) -> bool {
     let mut available = variant["behaviors"].as_array().cloned().unwrap_or_default();
-    original["behaviors"]
+    let kept = original["behaviors"]
         .as_array()
         .into_iter()
         .flatten()
@@ -208,7 +208,8 @@ fn required_behaviors(original: &Value, variant: &Value) -> bool {
             } else {
                 false
             }
-        })
+        });
+    kept && available.is_empty()
 }
 
 pub fn inline_vue_component_accept(

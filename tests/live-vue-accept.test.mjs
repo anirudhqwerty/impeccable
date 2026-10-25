@@ -11,7 +11,17 @@ test('Vue preview → Tune → Accept → Reload preserves style and behavior', 
   const browser = await chromium.launch({ headless: true, ...(process.env.IMPECCABLE_TEST_CHROME ? { executablePath: process.env.IMPECCABLE_TEST_CHROME } : {}) });
   const fixture = JSON.parse(readFileSync(join(FIXTURES_DIR, 'vite-vue-stateful', 'fixture.json')));
   let session;
-  t.after(async () => { if (session) { session.stopLiveServer(); await session.teardown(); } await browser.close(); });
+  let cleanupPromise;
+  const cleanup = () => cleanupPromise ||= (async () => {
+    await browser.close();
+    if (session) {
+      // This PID belongs to the sandboxed fixture server returned by boot.
+      // Closing it releases an outstanding agent poll before teardown awaits it.
+      try { process.kill(session.live.pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
+      await session.teardown();
+    }
+  })();
+  t.after(cleanup);
   try {
     session = await bootFixtureSession({ name: 'vite-vue-stateful', fixture, browser,
       wrapTarget: { file: 'src/App.vue', classes: 'card', tag: 'section' },
@@ -25,7 +35,7 @@ test('Vue preview → Tune → Accept → Reload preserves style and behavior', 
     const { page, tmp } = session;
     await waitForHandshake(page);
     const source = readFileSync(join(tmp, 'src/App.vue'), 'utf8');
-    await pickElement(page, 'section.card');
+    await pickElement(page, 'section.card', { position: { x: 4, y: 4 } });
     await clickGo(page);
     await waitForCycling(page, 3);
     assert.equal(readFileSync(join(tmp, 'src/App.vue'), 'utf8'), source, 'generation must not rewrite source');
@@ -56,5 +66,5 @@ test('Vue preview → Tune → Accept → Reload preserves style and behavior', 
     assert.doesNotMatch(accepted, /data-impeccable-|var\(--p-/);
     assert.deepEqual(readdirSync(join(tmp, 'node_modules/.impeccable-live')).filter(name => /^[a-f0-9]{8}$/.test(name)), []);
     execFileSync('npm', ['run', 'build'], { cwd: tmp, stdio: 'pipe' });
-  } finally { if (session) { session.stopLiveServer(); await session.teardown(); } await browser.close(); }
+  } finally { await cleanup(); }
 });

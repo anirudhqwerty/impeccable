@@ -48,6 +48,9 @@ impl Fixture {
         Self(dir)
     }
     fn accept(&self, variant: &str) -> (i32, Value) {
+        self.accept_params(variant, "{\"space\":23}")
+    }
+    fn accept_params(&self, variant: &str, params: &str) -> (i32, Value) {
         let (mut io, cap) = Io::captured("", self.0.clone(), HashMap::new());
         let code = live_accept::run(
             &[
@@ -56,7 +59,7 @@ impl Fixture {
                 "--variant",
                 variant,
                 "--param-values",
-                "{\"space\":23}",
+                params,
             ]
             .map(str::to_owned),
             &mut io,
@@ -83,11 +86,15 @@ fn variant(style: &str) -> String {
 
 #[test]
 fn vue_accept_preserves_tuned_values_scripts_and_bindings() {
-    let fixture = Fixture::new(SOURCE, &variant("scoped"));
+    let fixture = Fixture::new(
+        SOURCE,
+        &variant("scoped").replace("class=\"card\"", "class=\"card chosen\""),
+    );
     let (_, result) = fixture.accept("1");
     assert_eq!(result["handled"], true, "{result}");
     assert_ne!(result["mode"], "error", "{result}");
     let source = fixture.source();
+    assert!(source.contains("class=\"card chosen\""), "{source}");
     assert!(source.contains("padding: calc(23 * 1px)"), "{source}");
     assert!(!source.contains("var(--p-space"));
     assert_eq!(
@@ -186,6 +193,7 @@ fn vue_accept_rejects_script_edits_and_missing_behavior() {
         ),
         variant("scoped").replace("@click=\"increment\"", ""),
         variant("scoped").replace("{{ count }}", "0"),
+        variant("scoped").replace("<p>", "<p v-if=\"missingValue\">"),
     ] {
         let fixture = Fixture::new(SOURCE, &selected);
         let (_, result) = fixture.accept("1");
@@ -205,6 +213,46 @@ fn vue_accept_rejects_global_css_escape_without_writing() {
     let (_, result) = fixture.accept("1");
     assert_eq!(result["mode"], "error", "{result}");
     assert_eq!(fixture.source(), SOURCE);
+}
+
+#[test]
+fn vue_accept_rejects_malformed_parameters_without_using_defaults() {
+    let fixture = Fixture::new(SOURCE, &variant("scoped"));
+    let (_, result) = fixture.accept_params("1", "{bad-json");
+    assert_eq!(result["mode"], "error", "{result}");
+    assert!(
+        result["error"]
+            .as_str()
+            .unwrap_or("")
+            .contains("parameter values"),
+        "{result}"
+    );
+    assert_eq!(fixture.source(), SOURCE);
+}
+
+#[test]
+fn vue_accept_bakes_range_steps_and_toggle_without_preview_selectors() {
+    let selected = variant("scoped").replace("</style>", ".card[data-p-face=\"serif\"] { font-family: serif; }\n.card[data-p-bold] { font-weight: 700; }\n</style>");
+    let fixture = Fixture::new(SOURCE, &selected);
+    fs::write(
+        fixture
+            .0
+            .join("node_modules/.impeccable-live/ab12cd34/params.json"),
+        json!({"1":[
+            {"id":"space","kind":"range","default":8},
+            {"id":"face","kind":"steps","default":"sans"},
+            {"id":"bold","kind":"toggle","default":false}
+        ]})
+        .to_string(),
+    )
+    .unwrap();
+    let (_, result) = fixture.accept_params("1", "{\"space\":23,\"face\":\"serif\",\"bold\":true}");
+    assert_ne!(result["mode"], "error", "{result}");
+    let accepted = fixture.source();
+    for value in ["calc(23 * 1px)", "font-family: serif", "font-weight: 700"] {
+        assert!(accepted.contains(value), "{accepted}");
+    }
+    assert!(!accepted.contains("data-p-"), "{accepted}");
 }
 
 #[test]
