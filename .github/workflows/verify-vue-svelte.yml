@@ -8,10 +8,21 @@ jobs:
   svelte:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: feature-default
+            ref: d76e016b66d227a1db14c03647b2bf9041da7f3e
+            reload: '0'
+          - label: upstream-reload-baseline
+            ref: 936867543ac2576920d663cc9803597f6044f3ac
+            reload: '1'
+    name: ${{ matrix.label }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 38a5a0dcaebe0ba642fd3ec0ee99fa8375142812
+          ref: ${{ matrix.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -39,6 +50,6 @@ jobs:
         env:
           IMPECCABLE_E2E_ONLY: vite8-sveltekit-stateful
           IMPECCABLE_E2E_SCENARIOS: core,params,republish
-          IMPECCABLE_E2E_RELOAD_VARIANTS: '1'
+          IMPECCABLE_E2E_RELOAD_VARIANTS: ${{ matrix.reload }}
           IMPECCABLE_E2E_DEBUG: '1'
         run: bun run test:live-e2e
