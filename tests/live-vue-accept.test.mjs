@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -68,7 +68,8 @@ test('Vue preview → Tune → Accept → Reload preserves style and behavior', 
     assert.equal(accepted.split('<template>')[0], source.split('<template>')[0]);
     assert.equal(accepted.split('<style>')[1], source.split('<style>')[1]);
     assert.doesNotMatch(accepted, /data-impeccable-|var\(--p-/);
-    assert.deepEqual(readdirSync(join(tmp, 'node_modules/.impeccable-live')).filter(name => /^[a-f0-9]{8}$/.test(name)), []);
+    const previewRoot = join(tmp, 'node_modules/.impeccable-live');
+    assert.deepEqual(existsSync(previewRoot) ? readdirSync(previewRoot).filter(name => /^[a-f0-9]{8}$/.test(name)) : [], []);
     execFileSync('npm', ['run', 'build'], { cwd: tmp, stdio: 'pipe' });
   } catch (error) {
     if (session) t.diagnostic(JSON.stringify(await session.page.evaluate(() => ({
