@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
 import { bootFixtureSession } from './live-e2e/session.mjs';
-import { waitForHandshake, pickElement, clickGo, waitForCycling, openTunePanel, setTuneRange, closeTunePanel, clickAccept, waitForBarHidden } from './live-e2e/ui.mjs';
+import { waitForHandshake, pickElement, clickGo, waitForCycling, openTunePanel, setTuneRange, closeTunePanel, clickAccept, waitForBarHidden, clickExitLiveMode } from './live-e2e/ui.mjs';
 
 test('Vue preview → Tune → Accept → Reload preserves style and behavior', { timeout: 240000 }, async (t) => {
   const browser = await chromium.launch({ headless: true, ...(process.env.IMPECCABLE_TEST_CHROME ? { executablePath: process.env.IMPECCABLE_TEST_CHROME } : {}) });
@@ -58,9 +58,11 @@ test('Vue preview → Tune → Accept → Reload preserves style and behavior', 
     const accepted = readFileSync(join(tmp, 'src/App.vue'), 'utf8');
     assert.notEqual(accepted, source, 'accept must promote the selected component to source');
     await page.reload();
+    await waitForHandshake(page);
     await page.waitForSelector('section.card');
     assert.equal(await page.locator('section.card').evaluate(el => getComputedStyle(el).paddingLeft), '23px');
     assert.equal(await page.locator('.unrelated').evaluate(el => getComputedStyle(el).paddingLeft), '3px');
+    await clickExitLiveMode(page);
     await page.locator('section.card').click();
     await page.waitForFunction(() => document.querySelector('section.card').textContent.includes('Imports: 1'), null, { timeout: 15000 });
     assert.equal(accepted.split('<template>')[0], source.split('<template>')[0]);
