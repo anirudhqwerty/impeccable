@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: 7ca783ac071629d47c95f32eca724003c55accb6
+          ref: e7166a4c66e2249fcad8e50f50649fc682b908bc
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
@@ -23,7 +23,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-accept-v4
+          key: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-accept-v5
           restore-keys: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-
       - name: Install fixture compiler on runner only
         run: |
@@ -65,7 +65,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-accept-v4
+          key: vue-accept-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}-accept-v5
       - uses: actions/upload-artifact@v4
         if: always()
         with:
