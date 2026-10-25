@@ -1,0 +1,31 @@
+name: Verify portable Vue compiler regression setup
+on:
+  push:
+    branches: [verify/386-portable]
+permissions:
+  contents: read
+jobs:
+  compiler:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 3eccf43b7c5997a3c24cca55754595a6e9494eda
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: Swatinem/rust-cache@v2
+      - name: Install real compiler on runner
+        shell: pwsh
+        run: |
+          npm install --prefix "$env:RUNNER_TEMP/vue-compiler" --no-audit --no-fund @vue/compiler-sfc@3.5.44
+          "IMPECCABLE_TEST_VUE_MODULES=$env:RUNNER_TEMP/vue-compiler/node_modules" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Vue compiler acceptance regressions
+        run: cargo test --locked -p impeccable-live --test vue_accept
+      - name: Focused Rust formatting
+        run: rustfmt --edition 2021 --check crates/live/src/vue_component.rs crates/live/tests/vue_accept.rs
