@@ -23,9 +23,15 @@ impl Fixture {
         fs::create_dir_all(dir.join("node_modules/.impeccable-live/ab12cd34")).unwrap();
         fs::write(dir.join("package.json"), "{\"type\":\"module\"}").unwrap();
         if let Ok(modules) = std::env::var("IMPECCABLE_TEST_VUE_MODULES") {
-            let scope = dir.join("node_modules/@vue");
-            #[cfg(unix)]
-            std::os::unix::fs::symlink(PathBuf::from(&modules).join("@vue"), scope).unwrap();
+            // Forward to the real compiler without privileged Windows symlinks.
+            let compiler = dir.join("node_modules/@vue/compiler-sfc");
+            fs::create_dir_all(&compiler).unwrap();
+            let target = PathBuf::from(modules).join("@vue/compiler-sfc");
+            fs::write(
+                compiler.join("index.js"),
+                format!("module.exports = require({});", json!(target)),
+            )
+            .unwrap();
         }
         fs::write(dir.join("StatusCard.vue"), source).unwrap();
         let session = dir.join("node_modules/.impeccable-live/ab12cd34");
