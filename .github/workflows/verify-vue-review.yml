@@ -403,7 +403,7 @@ jobs:
           path: alias.log
 
   bots-rust-baseline:
-    if: inputs.phase == 'bots-baseline'
+    if: inputs.phase == 'bots-baseline' || inputs.phase == 'bots-rust-baseline'
     strategy:
       fail-fast: false
       matrix:
