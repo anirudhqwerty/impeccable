@@ -258,7 +258,7 @@ jobs:
         run: node --test tests/live-vue-bindings.test.mjs tests/live-browser-source.test.mjs
 
   vue-browser-debug:
-    if: inputs.phase == 'browser'
+    if: inputs.phase == 'browser' || inputs.phase == 'browser-order'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -286,6 +286,16 @@ jobs:
       - run: |
           cargo build --release --locked -p impeccable
           echo "IMPECCABLE_BIN=$GITHUB_WORKSPACE/target/release/impeccable" >> "$GITHUB_ENV"
+      - name: Reproduce preceding default and Live suites
+        if: inputs.phase == 'browser-order'
+        env:
+          IMPECCABLE_LIVE_VUE_COMPONENT: ''
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+        run: |
+          bun run build
+          bun run test
+          bun run test:live
       - run: |
           set -o pipefail
           bun run test:live-vue-accept 2>&1 | tee vue-browser.log
