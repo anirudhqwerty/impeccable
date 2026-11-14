@@ -14,6 +14,7 @@ permissions:
   contents: read
 jobs:
   compiler:
+    if: inputs.phase != 'current-baseline'
     strategy:
       fail-fast: false
       matrix:
@@ -189,11 +190,11 @@ jobs:
             *.log
             target/test-rust-changed.log
   upstream-baselines:
-    if: inputs.phase == 'validation'
+    if: inputs.phase == 'validation' || inputs.phase == 'current-baseline'
     strategy:
       fail-fast: false
       matrix:
-        ref: ['936867543ac2576920d663cc9803597f6044f3ac', '61e73eebd34a845df0bfef463eb0d31ed4eab581']
+        ref: ${{ fromJSON(inputs.phase == 'current-baseline' && '["61e73eebd34a845df0bfef463eb0d31ed4eab581"]' || '["936867543ac2576920d663cc9803597f6044f3ac","61e73eebd34a845df0bfef463eb0d31ed4eab581"]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
@@ -218,7 +219,12 @@ jobs:
         run: |
           cargo build --release --locked -p impeccable
           echo "IMPECCABLE_BIN=$GITHUB_WORKSPACE/target/release/impeccable" >> "$GITHUB_ENV"
-      - run: bun run build
+      - name: Baseline source build
+        id: baseline-build
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          bun run build 2>&1 | tee baseline-build.log
       - name: Actual baseline Live suite
         run: |
           set -o pipefail
