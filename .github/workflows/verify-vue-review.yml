@@ -304,3 +304,35 @@ jobs:
         with:
           name: vue-browser-debug
           path: vue-browser.log
+
+  parameter-restore:
+    if: inputs.phase == 'params-baseline' || inputs.phase == 'params-validation'
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.18.0', '24']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Initial restore and remount regression
+        run: |
+          set +e
+          node --test --test-reporter=tap tests/live-browser-source.test.mjs > params.log 2>&1
+          result=$?
+          cat params.log
+          if [ '${{ inputs.phase }}' = params-baseline ]; then
+            test "$result" != 0
+            grep -F '# fail 2' params.log
+          else
+            test "$result" = 0
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: params-${{ matrix.node }}
+          path: params.log
