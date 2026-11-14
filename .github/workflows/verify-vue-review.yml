@@ -3,9 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: Source revision
+        description: Full immutable source commit SHA
         required: true
-        default: feat/vue-accept-parity
+        default: db3fba3d1cb738cb771949221531d70e29fda2a4
       phase:
         description: baseline or validation
         required: true
@@ -189,6 +189,7 @@ jobs:
         run: |
           set -o pipefail
           bun run test:live-vue-accept 2>&1 | tee vue-browser.log
+          (cd tests && node --test --test-concurrency=4 --test-timeout=300000 --test-force-exit live-vue-accept.test.mjs live-vue-bindings.test.mjs live-vue-review.test.mjs) 2>&1 | tee vue-cwd.log
       - name: Svelte lifecycle Tune republish and top layer
         if: always() && steps.default.outcome != 'skipped'
         env:
@@ -206,6 +207,7 @@ jobs:
             default.log
             live.log
             vue-browser.log
+            vue-cwd.log
             svelte-browser.log
       - name: Dependent Rust crates
         if: always() && matrix.node == '24' && steps.default.outcome != 'skipped'
@@ -489,3 +491,39 @@ jobs:
           path: |
             review-browser.log
             cwd-baseline.log
+
+  validation-status-start:
+    if: inputs.phase == 'validation'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ inputs.ref }}
+    steps:
+      - name: Attach pending validation to the actual source commit
+        run: |
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo 'Use a full immutable source SHA'; exit 1; }
+          gh api --silent -X POST "repos/$GITHUB_REPOSITORY/statuses/$SOURCE_SHA" -f state=pending -f context='Vue review matrix / fork' -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" -f description='Hosted validation running on this exact source revision'
+  validation-status-finish:
+    needs: [validation-status-start, compiler, integration]
+    if: always() && inputs.phase == 'validation'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ inputs.ref }}
+    steps:
+      - name: Report actual matrix outcome without hiding baseline failures
+        run: |
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          matrix_state=success
+          matrix_description='All hosted validation jobs passed'
+          if [ '${{ needs.compiler.result }}' != success ] || [ '${{ needs.integration.result }}' != success ] || [ '${{ needs.validation-status-start.result }}' != success ]; then
+            matrix_state=failure
+            matrix_description='Matrix has failures; see baseline notes and unfiltered logs'
+          fi
+          gh api --silent -X POST "repos/$GITHUB_REPOSITORY/statuses/$SOURCE_SHA" -f state="$matrix_state" -f context='Vue review matrix / fork' -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" -f description="$matrix_description"
