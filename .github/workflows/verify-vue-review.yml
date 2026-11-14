@@ -65,6 +65,26 @@ jobs:
         if: inputs.phase == 'validation'
         shell: bash
         run: rustfmt --edition 2021 --config skip_children=true --check crates/live/src/vue_component.rs crates/live/tests/vue_accept.rs
+      - name: Match standard Windows temporary-file setup
+        if: inputs.phase == 'validation' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vueReviewTemp = Join-Path $env:RUNNER_TEMP 'tmp'
+          New-Item -ItemType Directory -Force -Path $vueReviewTemp | Out-Null
+          "TEMP=$vueReviewTemp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "TMP=$vueReviewTemp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Match standard Windows browser warmup
+        if: inputs.phase == 'validation' && runner.os == 'Windows'
+        shell: pwsh
+        timeout-minutes: 3
+        continue-on-error: true
+        run: |
+          $vueReviewChrome = Join-Path $env:ProgramFiles 'Google/Chrome/Application/chrome.exe'
+          if (Test-Path $vueReviewChrome) {
+            $vueReviewProfile = Join-Path $env:TEMP 'browser-warmup'
+            & $vueReviewChrome --headless=new --no-sandbox --disable-gpu "--user-data-dir=$vueReviewProfile" --dump-dom about:blank | Out-Null
+          }
+          exit 0
       - name: Complete Rust workspace
         if: inputs.phase == 'validation'
         shell: bash
@@ -177,6 +197,16 @@ jobs:
         run: |
           set -o pipefail
           bun run test:live-e2e 2>&1 | tee svelte-browser.log
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: browser-tests-node-${{ matrix.node }}
+          path: |
+            build.log
+            default.log
+            live.log
+            vue-browser.log
+            svelte-browser.log
       - name: Dependent Rust crates
         if: always() && matrix.node == '24' && steps.default.outcome != 'skipped'
         run: |
