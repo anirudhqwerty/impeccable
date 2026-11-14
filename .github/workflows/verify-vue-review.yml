@@ -423,7 +423,7 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/vue" --ignore-scripts --no-audit --no-fund @vue/compiler-sfc@3.5.44
           set +e
-          IMPECCABLE_TEST_VUE_MODULES="$RUNNER_TEMP/vue/node_modules" cargo test --locked -p impeccable-live --test vue_accept review_ -- --nocapture > review-rust.log 2>&1
+          IMPECCABLE_TEST_VUE_MODULES="$RUNNER_TEMP/vue/node_modules" cargo test --locked -p impeccable-live --test vue_accept review_vue_ -- --nocapture > review-rust.log 2>&1
           result=$?
           cat review-rust.log
           test "$result" != 0
