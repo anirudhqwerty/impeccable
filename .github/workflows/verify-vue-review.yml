@@ -401,3 +401,87 @@ jobs:
         with:
           name: alias-baseline-${{ runner.os }}
           path: alias.log
+
+  bots-rust-baseline:
+    if: inputs.phase == 'bots-baseline'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.18.0'
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+      - name: Reproduce review regressions with real compiler
+        shell: bash
+        run: |
+          npm install --prefix "$RUNNER_TEMP/vue" --ignore-scripts --no-audit --no-fund @vue/compiler-sfc@3.5.44
+          set +e
+          IMPECCABLE_TEST_VUE_MODULES="$RUNNER_TEMP/vue/node_modules" cargo test --locked -p impeccable-live --test vue_accept review_ -- --nocapture > review-rust.log 2>&1
+          result=$?
+          cat review-rust.log
+          test "$result" != 0
+          grep -F '1 passed; 6 failed' review-rust.log
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: review-rust-baseline-${{ runner.os }}
+          path: review-rust.log
+  bots-browser-baseline:
+    if: inputs.phase == 'bots-baseline'
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.18.0', '24']
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.3.13'
+      - run: bun install --frozen-lockfile
+      - run: |
+          npm install --prefix "$RUNNER_TEMP/vue" --ignore-scripts --no-audit --no-fund vue@3.5.44
+          echo "IMPECCABLE_TEST_VUE_MODULES=$RUNNER_TEMP/vue/node_modules" >> "$GITHUB_ENV"
+          npx playwright install --with-deps chromium
+      - name: Verify node eval argument positions
+        run: node --input-type=module -e 'if (process.argv[1] !== "app-root-control") process.exit(1); console.log(JSON.stringify(process.argv))' -- app-root-control
+      - name: Reproduce Options data and shared-state snapshot failures
+        run: |
+          set +e
+          node --test --test-reporter=tap tests/live-vue-review.test.mjs > review-browser.log 2>&1
+          result=$?
+          cat review-browser.log
+          test "$result" != 0
+          grep -F '# fail 2' review-browser.log
+      - name: Reproduce alternate working-directory fixture failure
+        env:
+          IMPECCABLE_LIVE_VUE_COMPONENT: '1'
+        run: |
+          set +e
+          cd tests
+          node --test --test-force-exit --test-timeout=30000 --test-reporter=tap live-vue-accept.test.mjs > ../cwd-baseline.log 2>&1
+          result=$?
+          cd ..
+          cat cwd-baseline.log
+          test "$result" != 0
+          grep -F 'tests/tests/fixtures/live-vue-accept/app/fixture.json' cwd-baseline.log
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: review-browser-baseline-${{ matrix.node }}
+          path: |
+            review-browser.log
+            cwd-baseline.log
