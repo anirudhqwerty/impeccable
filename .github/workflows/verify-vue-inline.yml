@@ -47,7 +47,7 @@ jobs:
           cargo test --locked -p impeccable-live --test vue_accept vue_inline_selection -- --nocapture > inline.log 2>&1
           result=$?
           cat inline.log
-          if [ '${{ inputs.phase }}' = baseline ]; then
+          if [ '${{ inputs.phase }}' != validation ]; then
             test "$result" != 0 && grep -F 'generation/Tune compiled but Accept failed' inline.log && grep -F 'Vue source changed since preview' inline.log
           else
             test "$result" = 0
@@ -153,3 +153,4 @@ jobs:
           path: |
             *.log
             tests/artifacts/
+
