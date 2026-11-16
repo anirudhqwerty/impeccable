@@ -1,5 +1,7 @@
 name: Vue inline isolation verification
 on:
+  push:
+    branches: [verify/vue-inline-1169]
   workflow_dispatch:
     inputs:
       ref:
